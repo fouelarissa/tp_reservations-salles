@@ -15,41 +15,71 @@ from .models import Reservation, Salle  # noqa: F401  (a utiliser)
 class SalleSerializer(serializers.ModelSerializer):
     class Meta:
         model = Salle
-        fields = ["id", "nom", "capacite", "batiment"]
+        fields = ['nom', 'capacite', 'batiment']
+    
 
 class ReservationSerializer(serializers.ModelSerializer):
+
+    # Le champ d'une réservation par un utilisateur
+    utilisateur = serializers.ReadOnlyField(source='utilisateur.username')
+
     class Meta:
         model = Reservation
-        fields = ["id", "salle", "utilisateur", "debut", "fin", "motif", "statut", "cree_le"]
-        read_only_fields = ["utilisateur", "cree_le"]
+        fields = ['salle', 'date_debut', 'date_fin', 'motif', 'statut', 'cree_le']
 
     def validate(self, data):
-        instance = self.instance
-        salle = data.get("salle", instance.salle if instance else None)
-        debut = data.get("debut", instance.debut if instance else None)
-        fin = data.get("fin", instance.fin if instance else None)
-        statut = data.get(
-            "statut", instance.statut if instance else Reservation.Statut.CONFIRMEE
-        )
+        # Récupérèrer les données
+        if 'salle' in data:
+            salle = data['salle']
+        elif self.instance:
+            salle = self.instance.salle
+        else:
+            raise serializers.ValidationError("La salle est obligatoire.")
+        
+        # verifie si la date de debut existe ou pas
+        if 'date_debut' in data:
+            date_debut = data['date_debut']
+        elif self.instance:
+            date_debut = self.instance.date_debut
+        else:
+            raise serializers.ValidationError("La date de début est obligatoire.")
 
-        if fin <= debut:
-            raise serializers.ValidationError(
-                "l'heure de fin doit être posterieure à l'heure de debut."
-            )
+        # les donnees de la requete de la date de fin existe ou pas?
+        if 'date_fin' in data:
+            date_fin = data['date_fin']
+        elif self.instance:
+            date_fin = self.instance.date_fin
+        else:
+            raise serializers.ValidationError("La date de fin est obligatoire.")
 
-        if statut == Reservation.Statut.CONFIRMEE:
-            conflits = Reservation.objects.filter(
-                salle=salle,
-                statut=Reservation.Statut.CONFIRMEE,
-                debut__lt=fin,
-                fin__gt=debut,
-            )
-            if instance:
-                conflits = conflits.exclude(pk=instance.pk)
-            if conflits.exists():
-                raise serializers.ValidationError(
-                    "Cette salle est deja reservee sur ce creneau."
-                )
+        # le statut de la reservation
+        if 'statut' in data:
+            statut = data['statut']
+        elif self.instance:
+            statut = self.instance.statut
+        else:
+            statut = 'CONFIRMEE'
+
+        # validation de cohérence des dates
+        if date_debut >= date_fin:
+            raise serializers.ValidationError("La date de début doit être posterieure à la date de fin.")
+
+        #  validation de la reservation futur quelle soit en cours ou annulé
+        if statut == 'ANNULEE':
+            return data
+
+        # les réservations actives ou en cours de la salle
+        reservations_existantes = Reservation.objects.filter(salle=salle)
+        
+        # il y'a aucun créneau même si la reservation est annulée
+        reservations_existantes = reservations_existantes.exclude(statut='ANNULEE')
+
+        #on exclut la réservation elle-même pour éviter le chevauchement avec soi-même
+        if self.instance:
+            reservations_existantes = reservations_existantes.exclude(id=self.instance.id)
+
+        if reservations_existantes.exists():
+            raise serializers.ValidationError("La salle est déjà réservée sur ce créneau horaire.")
+
         return data
-
-# TODO : votre code ici
+    

@@ -12,4 +12,11 @@ class IsOwnerOrReadOnly(permissions.BasePermission):
             return True
         return obj.utilisateur == request.user
 
+# Permission personnalisée pour les Salles.
+class IsStaffOrReadOnly(permissions.BasePermission):
+    def has_permission(self, request, view):
+        if request.method in permissions.SAFE_METHODS:
+            return True
+        return request.user and request.user.is_staff     
+
 # TODO : votre code ici

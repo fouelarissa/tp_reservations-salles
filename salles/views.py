@@ -8,4 +8,12 @@ from rest_framework import viewsets  # noqa: F401  (a utiliser)
 
 from .models import Reservation, Salle  # noqa: F401  (a utiliser)
 
+class AccountViewSet(viewsets.ModelViewSet):
+    queryset = Salle.objects.all()
+    serializer_class = SalleSerializer
+
+class AccountViewSet(viewsets.ModelViewSet):
+    queryset = Reservation.objects.all()
+    serializer_class = ReservationSerializer
+
 # TODO : votre code ici
